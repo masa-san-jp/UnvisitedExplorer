@@ -1,3 +1,3 @@
 .PHONY: project
 project:
-	./scripts/bootstrap.sh
+	bash ./scripts/bootstrap.sh
