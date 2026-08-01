@@ -1,0 +1,51 @@
+name: UnvisitedExplorer
+options:
+  bundleIdPrefix: jp.masa
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  UnvisitedExplorer:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/iOS
+    info:
+      path: Config/iOS-Info.plist
+    entitlements:
+      path: Config/iOS.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer
+        PRODUCT_NAME: 未踏マップ
+        INFOPLIST_FILE: Config/iOS-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/iOS.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - target: UnvisitedExplorerWatch
+        embed: true
+
+  UnvisitedExplorerWatch:
+    type: application.watchapp2
+    platform: watchOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/watchOS
+    info:
+      path: Config/watchOS-Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer.watchkitapp
+        PRODUCT_NAME: 未踏マップ
+        INFOPLIST_FILE: Config/watchOS-Info.plist
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "4"
