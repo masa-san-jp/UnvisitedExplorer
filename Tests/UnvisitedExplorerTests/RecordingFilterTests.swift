@@ -69,13 +69,55 @@ final class RecordingFilterTests: XCTestCase {
 
     // MARK: - 重複排除
 
-    /// 緯度 0.001 度 ≒ 111m、0.0001 度 ≒ 11m。
     private func last(offsetSeconds: TimeInterval = 0) -> AcceptedPoint {
         AcceptedPoint(
             timestamp: now.addingTimeInterval(offsetSeconds),
             latitude: base.latitude,
             longitude: base.longitude
         )
+    }
+
+    /// 指定した実距離だけ北へずらすための緯度差を、実測から逆算する。
+    /// 定数 111,320 を決め打ちすると 50m 境界の検証には誤差が大きすぎる。
+    private func latitudeOffset(northBy metres: CLLocationDistance) -> Double {
+        let origin = CLLocation(latitude: base.latitude, longitude: base.longitude)
+        let probe = CLLocation(latitude: base.latitude + 0.01, longitude: base.longitude)
+        let metresPerDegree = origin.distance(from: probe) / 0.01
+        return metres / metresPerDegree
+    }
+
+    /// ヘルパ自体がずれていると境界テストが無意味になるので固定する。
+    func testLatitudeOffsetHelperIsAccurate() {
+        for metres in [49.0, 51.0] {
+            let moved = CLLocation(
+                latitude: base.latitude + latitudeOffset(northBy: metres),
+                longitude: base.longitude
+            )
+            let actual = CLLocation(latitude: base.latitude, longitude: base.longitude)
+                .distance(from: moved)
+            XCTAssertEqual(actual, metres, accuracy: 0.5)
+        }
+    }
+
+    func testDistanceThresholdIsFiftyMetres() {
+        XCTAssertEqual(RecordingPolicy.minDistance, 50)
+        XCTAssertEqual(RecordingPolicy.minInterval, 60)
+    }
+
+    func testJustUnderFiftyMetresWithinTheIntervalIsRejected() {
+        let decision = decide(
+            payload(offsetSeconds: 30, latitudeOffset: latitudeOffset(northBy: 49)),
+            lastAccepted: last()
+        )
+        XCTAssertEqual(decision, .rejectDuplicate)
+    }
+
+    func testJustOverFiftyMetresIsAccepted() {
+        let decision = decide(
+            payload(offsetSeconds: 30, latitudeOffset: latitudeOffset(northBy: 51)),
+            lastAccepted: last()
+        )
+        XCTAssertEqual(decision, .accept)
     }
 
     func testNearbyAndRecentIsRejected() {

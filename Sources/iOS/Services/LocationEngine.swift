@@ -81,6 +81,10 @@ final class LocationEngine: NSObject, ObservableObject {
 
         manager.startMonitoringSignificantLocationChanges()  // L0
 
+        // refreshAnchor は isRecording を条件に含めるため、L2 を arm する前に立てる。
+        isRecording = true
+        lastError = nil
+
         if isAlways {
             manager.startMonitoringVisits()                  // L1
             if anchorRegion == nil, manager.location == nil {
@@ -90,9 +94,6 @@ final class LocationEngine: NSObject, ObservableObject {
                 refreshAnchor()                              // L2
             }
         }
-
-        isRecording = true
-        lastError = nil
     }
 
     func stop() {
@@ -119,7 +120,10 @@ final class LocationEngine: NSObject, ObservableObject {
     /// 失敗するとチェーンが切れ、L2 が無言で停止するため、L0/L1 の配信時・
     /// エラー時・フォアグラウンド復帰時にも張り直す。
     private func refreshAnchor(at coordinate: CLLocationCoordinate2D? = nil) {
-        guard manager.authorizationStatus == .authorizedAlways,
+        // isRecording を見ないと、stop() 後のフォアグラウンド復帰で
+        // applicationDidBecomeActive からアンカーが再作成され、停止操作が無効になる。
+        guard isRecording,
+              manager.authorizationStatus == .authorizedAlways,
               CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self),
               let center = coordinate ?? lastKnownCoordinate ?? manager.location?.coordinate
         else { return }
@@ -157,6 +161,9 @@ final class LocationEngine: NSObject, ObservableObject {
     // MARK: - 記録
 
     private func record(_ location: CLLocation) {
+        // stop() 済みでも、キュー済みの delegate コールバックはここへ到達しうる。
+        guard isRecording else { return }
+
         let payload = LocationPayload(
             timestamp: location.timestamp,
             latitude: location.coordinate.latitude,
@@ -168,30 +175,45 @@ final class LocationEngine: NSObject, ObservableObject {
             course: location.course,
             source: .iPhone
         )
-        if store.ingest(payload) == .accept {
-            latestLocation = location
-        }
+        apply(store.ingest(payload), acceptedLocation: location)
     }
 
     private func record(_ visit: CLVisit) {
+        guard isRecording else { return }
+
         let timestamp = RecordingPolicy.visitTimestamp(
             arrival: visit.arrivalDate,
             departure: visit.departureDate,
             now: Date()
         )
-        store.ingest(
-            LocationPayload(
-                timestamp: timestamp,
-                latitude: visit.coordinate.latitude,
-                longitude: visit.coordinate.longitude,
-                altitude: 0,
-                horizontalAccuracy: visit.horizontalAccuracy,
-                verticalAccuracy: -1,
-                speed: -1,
-                course: -1,
-                source: .iPhone
-            )
+        apply(
+            store.ingest(
+                LocationPayload(
+                    timestamp: timestamp,
+                    latitude: visit.coordinate.latitude,
+                    longitude: visit.coordinate.longitude,
+                    altitude: 0,
+                    horizontalAccuracy: visit.horizontalAccuracy,
+                    verticalAccuracy: -1,
+                    speed: -1,
+                    course: -1,
+                    source: .iPhone
+                )
+            ),
+            acceptedLocation: nil
         )
+    }
+
+    /// 保存失敗を握りつぶさず利用者に見せる。設定画面が `lastError` を表示している。
+    private func apply(_ outcome: IngestOutcome, acceptedLocation: CLLocation?) {
+        switch outcome {
+        case .accepted:
+            if let acceptedLocation { latestLocation = acceptedLocation }
+        case .failed(let message):
+            lastError = "位置の保存に失敗しました: \(message)"
+        case .rejected:
+            break
+        }
     }
 }
 
@@ -226,9 +248,12 @@ extension LocationEngine: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
         Task { @MainActor in
-            lastKnownCoordinate = visit.coordinate
             record(visit)
-            refreshAnchor(at: visit.coordinate)
+            // visit.coordinate は「過去の滞在地点」であって現在地ではない。
+            // Visit は数分〜数時間遅れて届くため、これをアンカー中心にすると
+            // すでに離れた地点へ張り直して直後に didExitRegion を誘発する。
+            // アンカーは現在地由来の座標だけで更新する。
+            refreshAnchor()
         }
     }
 

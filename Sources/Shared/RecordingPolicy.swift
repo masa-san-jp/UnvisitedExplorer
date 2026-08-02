@@ -2,7 +2,9 @@ import CoreLocation
 import Foundation
 
 /// 取り込み経路の種別。鮮度フィルタの適用有無だけが異なる(仕様 §3.5)。
-public enum IngestPolicy: Sendable {
+///
+/// 連想値がないため Equatable は暗黙に得られるが、public な型の契約として明示する。
+public enum IngestPolicy: Sendable, Equatable {
     /// L0〜L4 / Watch からのリアルタイム配信。
     case live
     /// インポートした過去データ。

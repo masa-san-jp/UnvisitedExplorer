@@ -46,7 +46,7 @@ final class LocationStoreTests: XCTestCase {
         let container = try makeContainer()
         let store = LocationStore(container: container)
 
-        XCTAssertEqual(store.ingest(payload(), now: now), .accept)
+        XCTAssertEqual(store.ingest(payload(), now: now), .accepted)
 
         let result = try counts(container)
         XCTAssertEqual(result.samples, 1)
@@ -57,7 +57,7 @@ final class LocationStoreTests: XCTestCase {
         let container = try makeContainer()
         let store = LocationStore(container: container)
 
-        XCTAssertEqual(store.ingest(payload(accuracy: 500), now: now), .rejectAccuracy)
+        XCTAssertEqual(store.ingest(payload(accuracy: 500), now: now), .rejected(.rejectAccuracy))
 
         let result = try counts(container)
         XCTAssertEqual(result.samples, 0)
@@ -68,10 +68,10 @@ final class LocationStoreTests: XCTestCase {
         let container = try makeContainer()
         let store = LocationStore(container: container)
 
-        XCTAssertEqual(store.ingest(payload(), now: now), .accept)
+        XCTAssertEqual(store.ingest(payload(), now: now), .accepted)
         XCTAssertEqual(
             store.ingest(payload(offsetSeconds: 30), now: now),
-            .rejectDuplicate
+            .rejected(.rejectDuplicate)
         )
 
         XCTAssertEqual(try counts(container).samples, 1)
@@ -81,10 +81,10 @@ final class LocationStoreTests: XCTestCase {
         let container = try makeContainer()
         let store = LocationStore(container: container)
 
-        XCTAssertEqual(store.ingest(payload(), now: now), .accept)
+        XCTAssertEqual(store.ingest(payload(), now: now), .accepted)
         XCTAssertEqual(
             store.ingest(payload(latitude: 36.1, offsetSeconds: 120), now: now),
-            .accept
+            .accepted
         )
 
         let result = try counts(container)
@@ -109,7 +109,7 @@ final class LocationStoreTests: XCTestCase {
                 payload(latitude: center.latitude, longitude: center.longitude),
                 now: now
             ),
-            .accept
+            .accepted
         )
         XCTAssertEqual(
             store.ingest(
@@ -120,7 +120,7 @@ final class LocationStoreTests: XCTestCase {
                 ),
                 now: now
             ),
-            .accept
+            .accepted
         )
 
         let cells = try container.mainContext.fetch(FetchDescriptor<VisitedCell>())
@@ -133,13 +133,13 @@ final class LocationStoreTests: XCTestCase {
     func testDeduplicationStateIsSeededFromTheDatabase() throws {
         let container = try makeContainer()
         let first = LocationStore(container: container)
-        XCTAssertEqual(first.ingest(payload(), now: now), .accept)
+        XCTAssertEqual(first.ingest(payload(), now: now), .accepted)
 
         // プロセスが落ちて再起動した状況を模す。
         let restarted = LocationStore(container: container)
         XCTAssertEqual(
             restarted.ingest(payload(offsetSeconds: 30), now: now),
-            .rejectDuplicate
+            .rejected(.rejectDuplicate)
         )
 
         XCTAssertEqual(try counts(container).samples, 1)
@@ -148,12 +148,14 @@ final class LocationStoreTests: XCTestCase {
     func testDeleteAllClearsBothModels() throws {
         let container = try makeContainer()
         let store = LocationStore(container: container)
-        XCTAssertEqual(store.ingest(payload(), now: now), .accept)
+        XCTAssertEqual(store.ingest(payload(), now: now), .accepted)
 
         let context = container.mainContext
-        store.deleteAll(
-            samples: try context.fetch(FetchDescriptor<LocationSample>()),
-            cells: try context.fetch(FetchDescriptor<VisitedCell>())
+        XCTAssertTrue(
+            store.deleteAll(
+                samples: try context.fetch(FetchDescriptor<LocationSample>()),
+                cells: try context.fetch(FetchDescriptor<VisitedCell>())
+            )
         )
 
         let result = try counts(container)
