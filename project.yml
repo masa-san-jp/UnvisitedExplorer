@@ -27,6 +27,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer
         PRODUCT_NAME: 未踏マップ
+        # PRODUCT_NAME が非ASCIIのため、モジュール名は明示しないと
+        # サニタイズされて @testable import できなくなる。
+        PRODUCT_MODULE_NAME: UnvisitedExplorer
         INFOPLIST_FILE: Config/iOS-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1"
@@ -46,6 +49,32 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer.watchkitapp
         PRODUCT_NAME: 未踏マップ
+        PRODUCT_MODULE_NAME: UnvisitedExplorerWatch
         INFOPLIST_FILE: Config/watchOS-Info.plist
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
+
+  UnvisitedExplorerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/UnvisitedExplorerTests
+    dependencies:
+      - target: UnvisitedExplorer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorerTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  UnvisitedExplorer:
+    build:
+      targets:
+        UnvisitedExplorer: all
+        UnvisitedExplorerTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - UnvisitedExplorerTests

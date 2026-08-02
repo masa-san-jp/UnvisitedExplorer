@@ -2,7 +2,7 @@ import CoreLocation
 import SwiftUI
 
 struct PermissionCard: View {
-    @EnvironmentObject private var recorder: LocationRecorder
+    @EnvironmentObject private var engine: LocationEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -13,20 +13,20 @@ struct PermissionCard: View {
                 .foregroundStyle(.secondary)
 
             HStack {
-                if recorder.authorizationStatus == .notDetermined {
+                if engine.authorizationStatus == .notDetermined {
                     Button("使用中のみ許可") {
-                        recorder.requestWhenInUseAuthorization()
+                        engine.requestWhenInUseAuthorization()
                     }
                     .buttonStyle(.borderedProminent)
-                } else if recorder.authorizationStatus == .authorizedWhenInUse {
+                } else if engine.authorizationStatus == .authorizedWhenInUse {
                     Button("常に許可へ進む") {
-                        recorder.requestAlwaysAuthorization()
+                        engine.requestAlwaysAuthorization()
                     }
                     .buttonStyle(.borderedProminent)
                 }
 
-                Button(recorder.isRecording ? "記録停止" : "記録開始") {
-                    recorder.isRecording ? recorder.stopRecording() : recorder.startRecording()
+                Button(engine.isRecording ? "記録停止" : "記録開始") {
+                    engine.isRecording ? engine.stop() : engine.start()
                 }
                 .buttonStyle(.bordered)
             }
@@ -36,9 +36,9 @@ struct PermissionCard: View {
     }
 
     private var explanation: String {
-        switch recorder.authorizationStatus {
+        switch engine.authorizationStatus {
         case .authorizedAlways:
-            return "常時記録が有効です。iPhoneを再起動した後は一度アプリを開いてください。"
+            return "常時記録が有効です。アプリを閉じていても記録されます。"
         case .authorizedWhenInUse:
             return "アプリ使用中は記録できます。閉じている間も記録するには「常に許可」が必要です。"
         case .denied, .restricted:

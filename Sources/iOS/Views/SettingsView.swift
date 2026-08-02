@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var recorder: LocationRecorder
+    @EnvironmentObject private var engine: LocationEngine
     @EnvironmentObject private var store: LocationStore
     @Query(sort: \LocationSample.timestamp, order: .reverse) private var samples: [LocationSample]
     @Query(sort: \VisitedCell.lastVisitedAt, order: .reverse) private var cells: [VisitedCell]
@@ -16,7 +16,15 @@ struct SettingsView: View {
         Form {
             Section("位置記録") {
                 PermissionCard()
-                if let error = recorder.lastError {
+                if engine.launchedForLocationEvent {
+                    Label(
+                        "直近の起動は位置イベントによるバックグラウンド起動でした",
+                        systemImage: "checkmark.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                if let error = engine.lastError {
                     Text(error).foregroundStyle(.red)
                 }
             }

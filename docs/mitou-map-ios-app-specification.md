@@ -124,7 +124,7 @@ iPhoneが自動で位置ログを取り続け、「行ったことがある場�
 - `UIApplicationDelegateAdaptor` を導入し、`application(_:didFinishLaunchingWithOptions:)` で `launchOptions[.location]` によるバックグラウンド起動を検知する
 - **delegate の設定と L0〜L2 の再 arm は、UI表示を待たず起動時に無条件で実行する。** CoreLocation は delegate が存在して初めてイベントを配信するため、ここが遅れると起動理由となったイベント自体を取りこぼす
 - LocationEngine / Store は SwiftUI の Scene ライフサイクルから切り離す。`@StateObject(wrappedValue:)` は autoclosure であり、Scene の body が評価されるまでインスタンス化されない。UIに依存した保持では、バックグラウンド起動時に記録が一切走らない
-- バックグラウンド記録は `mainContext` とは別の `ModelContext` を使う
+- 記録経路は `@MainActor` に統一する。バックグラウンド起動でもメインランループは存在し、UI がないため `mainContext` を使っても詰まる相手がいない。`CLLocationManager` の delegate コールバックは manager を生成したスレッドに届くため、アクターを1つに保つことで SwiftData の並行性バグを回避できる。L4(精密モード)を常用する段階になったら、そのときに別 `ModelContext` への分離を検討する
 - 記録処理は起動から3秒以内に完了させる(§9)
 
 ### 3.5 統合記録パイプライン

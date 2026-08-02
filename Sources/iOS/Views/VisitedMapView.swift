@@ -4,7 +4,7 @@ import SwiftData
 import SwiftUI
 
 struct VisitedMapView: View {
-    @EnvironmentObject private var recorder: LocationRecorder
+    @EnvironmentObject private var engine: LocationEngine
     @Query(sort: \VisitedCell.lastVisitedAt, order: .reverse) private var visitedCells: [VisitedCell]
     @Query(sort: \LocationSample.timestamp, order: .reverse) private var samples: [LocationSample]
 
@@ -12,7 +12,7 @@ struct VisitedMapView: View {
     @State private var selectedSuggestion: ExplorationSuggestion?
 
     private var origin: CLLocationCoordinate2D? {
-        recorder.latestLocation?.coordinate ?? samples.first.map {
+        engine.latestLocation?.coordinate ?? samples.first.map {
             CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
         }
     }
@@ -49,7 +49,7 @@ struct VisitedMapView: View {
             .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 10) {
-                if recorder.authorizationStatus != .authorizedAlways {
+                if engine.authorizationStatus != .authorizedAlways {
                     PermissionCard()
                 }
 
@@ -77,7 +77,7 @@ struct VisitedMapView: View {
         .navigationTitle("未踏マップ")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            recorder.startRecording()
+            // 記録の開始は AppDelegate が担う。UI が記録開始のトリガーであってはならない。
             recenter()
         }
     }
