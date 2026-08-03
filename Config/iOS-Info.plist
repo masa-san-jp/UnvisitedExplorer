@@ -13,6 +13,13 @@
   <key>UIBackgroundModes</key>
   <array>
     <string>location</string>
+    <!-- L3 時刻ハートビート (BGAppRefreshTask) に必要 -->
+    <string>fetch</string>
+  </array>
+  <!-- Heartbeat.identifier と一致させること。食い違うと登録時にクラッシュする。 -->
+  <key>BGTaskSchedulerPermittedIdentifiers</key>
+  <array>
+    <string>jp.masa.UnvisitedExplorer.heartbeat</string>
   </array>
 </dict>
 </plist>

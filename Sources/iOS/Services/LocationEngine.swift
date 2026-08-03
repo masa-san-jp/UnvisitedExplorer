@@ -108,6 +108,39 @@ final class LocationEngine: NSObject, ObservableObject {
         refreshAnchor()
     }
 
+    // MARK: - L3 時刻ハートビート
+
+    private var heartbeatCompletion: ((Bool) -> Void)?
+
+    /// 単発測位を1回だけ行う(仕様 §3.3)。滞在中に L0〜L2 が発火しない状況の裏取り。
+    ///
+    /// `completion` は必ず1回呼ばれる。`requestLocation()` は自前のタイムアウトを持ち、
+    /// 失敗時は `didFailWithError` が届くため、そこで解決する。
+    func performHeartbeat(completion: @escaping (Bool) -> Void) {
+        guard isRecording else {
+            completion(false)
+            return
+        }
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            break
+        default:
+            completion(false)
+            return
+        }
+
+        // 前回の待ちが残っていれば解放してから差し替える。
+        finishHeartbeat(false)
+        heartbeatCompletion = completion
+        manager.requestLocation()
+    }
+
+    private func finishHeartbeat(_ success: Bool) {
+        guard let completion = heartbeatCompletion else { return }
+        heartbeatCompletion = nil
+        completion(success)
+    }
+
     // MARK: - L2 追尾ジオフェンス
 
     private var anchorRegion: CLCircularRegion? {
@@ -243,6 +276,7 @@ extension LocationEngine: CLLocationManagerDelegate {
                 record(location)
             }
             refreshAnchor()
+            finishHeartbeat(true)
         }
     }
 
@@ -271,6 +305,7 @@ extension LocationEngine: CLLocationManagerDelegate {
         Task { @MainActor in
             lastError = error.localizedDescription
             refreshAnchor()
+            finishHeartbeat(false)
         }
     }
 }

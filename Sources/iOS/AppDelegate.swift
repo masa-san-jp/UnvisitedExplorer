@@ -10,19 +10,29 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // BGTaskScheduler への登録はこのメソッドが return する前に済ませる必要がある。
+        Heartbeat.register()
+
         let engine = LocationEngine.shared
 
         if launchOptions?[.location] != nil {
             engine.noteLaunchedForLocationEvent()
         }
 
-        // 起動理由によらず無条件で arm する。UI の表示を待たない。
+        // 起動理由によらず無条件に arm する。UI の表示を待たない。
         engine.start()
+
+        Heartbeat.schedule()
         return true
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         // L2 のチェーンが切れていた場合の復旧点。
         LocationEngine.shared.refreshAnchorIfPossible()
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        // 次回のハートビートを積み直す。submit 済みなら無害。
+        Heartbeat.schedule()
     }
 }
