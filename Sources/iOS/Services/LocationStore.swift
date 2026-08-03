@@ -2,6 +2,20 @@ import CoreLocation
 import Foundation
 import SwiftData
 
+/// 一括取り込みの結果。
+struct ImportSummary: Equatable {
+    var accepted = 0
+    /// 精度・重複排除で弾かれた件数。
+    var rejected = 0
+    /// すでに取り込み済みだった件数(同じファイルの再投入)。
+    var duplicated = 0
+    var newCells = 0
+    /// 保存に失敗した場合の理由。設定されていれば取り込みは途中で打ち切られている。
+    var failure: String?
+
+    var isSuccess: Bool { failure == nil }
+}
+
 /// `ingest` の結果。棄却と保存失敗を呼び出し元が区別できるようにする。
 enum IngestOutcome: Equatable {
     case accepted
@@ -90,6 +104,98 @@ final class LocationStore: ObservableObject {
             longitude: payload.longitude
         )
         return .accepted
+    }
+
+    /// 過去データの一括取り込み(仕様 §8)。
+    ///
+    /// 1点ずつ `ingest` を呼ぶと、点ごとに fetch と save が走って数万件で実用にならない。
+    /// 既存 ID とセルを先に読み込み、保存はまとめて行う。フィルタは §3.5 と同じものを使う。
+    func ingestHistorical(_ payloads: [LocationPayload]) -> ImportSummary {
+        var summary = ImportSummary()
+        guard !payloads.isEmpty else { return summary }
+
+        // 重複排除は直前の採用点と比較するため、時系列に並べないと意味を持たない。
+        let ordered = payloads.sorted { $0.timestamp < $1.timestamp }
+
+        var knownIDs = Set(
+            ((try? context.fetch(FetchDescriptor<LocationSample>())) ?? []).map(\.id)
+        )
+        var cells = Dictionary(
+            (((try? context.fetch(FetchDescriptor<VisitedCell>())) ?? []).map { ($0.key, $0) }),
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var pending = 0
+        for payload in ordered {
+            guard !knownIDs.contains(payload.id) else {
+                summary.duplicated += 1
+                continue
+            }
+
+            let decision = RecordingFilter.decide(
+                payload,
+                lastAccepted: lastAccepted,
+                now: Date(),
+                policy: .historical
+            )
+            guard decision == .accept else {
+                summary.rejected += 1
+                continue
+            }
+
+            let cell = GeoGrid.cell(
+                for: CLLocationCoordinate2D(
+                    latitude: payload.latitude,
+                    longitude: payload.longitude
+                )
+            )
+            context.insert(LocationSample(payload: payload, gridKey: cell.key))
+            knownIDs.insert(payload.id)
+
+            if let existing = cells[cell.key] {
+                existing.lastVisitedAt = max(existing.lastVisitedAt, payload.timestamp)
+                existing.firstVisitedAt = min(existing.firstVisitedAt, payload.timestamp)
+                existing.visitCount += 1
+            } else {
+                let created = VisitedCell(cell: cell, timestamp: payload.timestamp)
+                context.insert(created)
+                cells[cell.key] = created
+                summary.newCells += 1
+            }
+
+            lastAccepted = AcceptedPoint(
+                timestamp: payload.timestamp,
+                latitude: payload.latitude,
+                longitude: payload.longitude
+            )
+            summary.accepted += 1
+            pending += 1
+
+            if pending >= Self.importBatchSize {
+                guard flush(&summary) else { return summary }
+                pending = 0
+            }
+        }
+
+        guard flush(&summary) else { return summary }
+
+        // 取り込み後は最新の点を基準に戻す。取り込んだ末尾は過去日時のことがある。
+        lastAccepted = Self.loadLastAccepted(from: context)
+        return summary
+    }
+
+    private static let importBatchSize = 500
+
+    private func flush(_ summary: inout ImportSummary) -> Bool {
+        guard context.hasChanges else { return true }
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.rollback()
+            summary.failure = error.localizedDescription
+            return false
+        }
     }
 
     @discardableResult
