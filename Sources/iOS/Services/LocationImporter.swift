@@ -156,39 +156,90 @@ enum LocationImporter {
 
     // MARK: - CSV
 
-    /// `timestamp,lat,lng,accuracy,source`。ExportService の出力を読み戻せる。
     /// 壊れた行は黙って飛ばす。
+    ///
+    /// 列の位置は推測せずヘッダから解決する。ExportService の出力は
+    /// `id,timestamp,latitude,longitude,altitude,horizontal_accuracy,...` の順で、
+    /// 「経度の次が精度」と決め打ちすると**高度を精度として読んでしまう**。
+    /// 標高の高い地点が精度不良として棄却され、静かに欠落する。
     static func parseCSV(_ data: Data) -> [LocationPayload] {
         let text = String(decoding: data, as: UTF8.self)
         var payloads: [LocationPayload] = []
+        var layout: CSVLayout?
 
         for line in text.split(whereSeparator: \.isNewline) {
             let columns = line.split(separator: ",", omittingEmptySubsequences: false)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
             guard columns.count >= 3 else { continue }
 
-            // ExportService の出力は id が先頭にあるため、両方の並びを受ける。
-            let offset = parseDate(columns[0]) != nil ? 0 : 1
-            guard columns.count > offset + 2,
-                  let timestamp = parseDate(columns[offset]),
-                  let latitude = Double(columns[offset + 1]),
-                  let longitude = Double(columns[offset + 2])
-            else { continue }
-
-            let accuracy = columns.count > offset + 3
-                ? Double(columns[offset + 3]) ?? assumedAccuracy
-                : assumedAccuracy
-
-            payloads.append(
-                make(
-                    timestamp: timestamp,
-                    latitude: latitude,
-                    longitude: longitude,
-                    accuracy: accuracy
-                )
-            )
+            if layout == nil {
+                if let header = CSVLayout(header: columns) {
+                    layout = header
+                    continue
+                }
+                // ヘッダの無いファイルは並びから推定する。
+                layout = CSVLayout(firstDataRow: columns)
+            }
+            guard let layout, let payload = layout.payload(from: columns) else { continue }
+            payloads.append(payload)
         }
         return payloads
+    }
+
+    /// CSV の列位置。
+    struct CSVLayout {
+        let timestamp: Int
+        let latitude: Int
+        let longitude: Int
+        let accuracy: Int?
+
+        init?(header columns: [String]) {
+            func index(of names: Set<String>) -> Int? {
+                columns.firstIndex {
+                    names.contains($0.lowercased().replacingOccurrences(of: "_", with: ""))
+                }
+            }
+            guard let timestamp = index(of: ["timestamp", "time", "date"]),
+                  let latitude = index(of: ["latitude", "lat"]),
+                  let longitude = index(of: ["longitude", "lng", "lon"])
+            else { return nil }
+
+            self.timestamp = timestamp
+            self.latitude = latitude
+            self.longitude = longitude
+            accuracy = index(of: ["horizontalaccuracy", "accuracy"])
+        }
+
+        /// ヘッダが無い場合。日付として読める最初の列を時刻とみなす。
+        init?(firstDataRow columns: [String]) {
+            guard let timestamp = columns.indices.first(where: {
+                LocationImporter.parseDate(columns[$0]) != nil
+            }), columns.count > timestamp + 2 else { return nil }
+
+            self.timestamp = timestamp
+            latitude = timestamp + 1
+            longitude = timestamp + 2
+            accuracy = columns.count > timestamp + 3 ? timestamp + 3 : nil
+        }
+
+        func payload(from columns: [String]) -> LocationPayload? {
+            guard columns.count > max(timestamp, latitude, longitude),
+                  let date = LocationImporter.parseDate(columns[timestamp]),
+                  let lat = Double(columns[latitude]),
+                  let lon = Double(columns[longitude])
+            else { return nil }
+
+            let resolved = accuracy.flatMap { index -> Double? in
+                columns.count > index ? Double(columns[index]) : nil
+            } ?? LocationImporter.assumedAccuracy
+
+            return LocationImporter.make(
+                timestamp: date,
+                latitude: lat,
+                longitude: lon,
+                accuracy: resolved
+            )
+        }
     }
 
     // MARK: - 共通

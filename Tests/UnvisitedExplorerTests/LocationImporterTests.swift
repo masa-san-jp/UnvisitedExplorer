@@ -87,6 +87,39 @@ final class LocationImporterTests: XCTestCase {
         XCTAssertEqual(payloads[0].horizontalAccuracy, 12)
     }
 
+    /// 高度と精度を取り違えると、標高の高い地点が精度不良として静かに消える。
+    func testAltitudeIsNotMistakenForAccuracy() throws {
+        let csv = """
+        id,timestamp,latitude,longitude,altitude,horizontal_accuracy,speed,course,source
+        \(UUID().uuidString),2024-05-01T00:00:00Z,36.5000,138.5000,2500.0,8.0,-1.0,-1.0,iPhone
+        """
+        let payloads = try LocationImporter.parse(data: data(csv), fileName: "mountain.csv")
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(payloads[0].horizontalAccuracy, 8, "高度2500mを精度として読んではいけない")
+    }
+
+    func testColumnOrderIsResolvedFromTheHeaderNotPosition() throws {
+        let csv = """
+        source,accuracy,lng,lat,time
+        iPhone,15,139.6670,36.0620,2024-05-01T00:00:00Z
+        """
+        let payloads = try LocationImporter.parse(data: data(csv), fileName: "shuffled.csv")
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(payloads[0].latitude, 36.062, accuracy: 0.0001)
+        XCTAssertEqual(payloads[0].longitude, 139.667, accuracy: 0.0001)
+        XCTAssertEqual(payloads[0].horizontalAccuracy, 15)
+    }
+
+    func testHeaderlessCSVFallsBackToPositionalOrder() throws {
+        let csv = "2024-05-01T00:00:00Z,36.0620,139.6670,18"
+        let payloads = try LocationImporter.parse(data: data(csv), fileName: "raw.csv")
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(payloads[0].horizontalAccuracy, 18)
+    }
+
     func testCSVWithoutLeadingIDColumn() throws {
         let csv = """
         timestamp,lat,lng,accuracy
