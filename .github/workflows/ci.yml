@@ -6,16 +6,18 @@ on:
   push:
     branches: ['claude/**']
 
+# push と pull_request が同一コミットで二重に走るのを防ぐため、
+# ref ではなく SHA でグループ化する。
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
   test:
-    # iOS 17 SDK が必要 (project.yml の deploymentTarget)。
-    # macOS ランナーは Linux の10倍のレートで課金されるため、
-    # トリガーは PR と作業ブランチに絞っている。
-    runs-on: macos-14
+    # macos-14 は Xcode 15.4 で、XcodeGen が生成する project format 77 を
+    # 読めない ("cannot be opened because it is in a future Xcode project
+    # file format")。format 77 には Xcode 16 以降が必要。
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
