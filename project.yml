@@ -34,10 +34,17 @@ targets:
         INFOPLIST_FILE: Config/iOS-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1"
-    dependencies:
-      - target: UnvisitedExplorerWatch
-        embed: true
+    # Watch は当面 iOS ターゲットに embed しない (Issue #10 の R3)。
+    # embed すると watchOS 側のバイナリ生成が二重定義になり、iOS のビルド自体が
+    # 通らない ("Multiple commands produce ... UnvisitedExplorerWatch")。
+    # Watch は手動セッション記録専用で L0/L1/L2 とは無関係のため、
+    # 位置記録の検証を優先して切り離す。復帰は下記4行を戻すだけ。
+    #
+    # dependencies:
+    #   - target: UnvisitedExplorerWatch
+    #     embed: true
 
+  # ターゲット定義自体は残す (単体でビルド・検証は可能)。
   UnvisitedExplorerWatch:
     type: application.watchapp2
     platform: watchOS
