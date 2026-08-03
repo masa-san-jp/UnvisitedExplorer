@@ -19,8 +19,10 @@ targets:
     sources:
       - path: Sources/Shared
       - path: Sources/iOS
-    info:
-      path: Config/iOS-Info.plist
+    # `info:` は指定しない。指定すると XcodeGen が Config/iOS-Info.plist を
+    # 生成し直し、手書きの UIBackgroundModes・BGTaskSchedulerPermittedIdentifiers・
+    # 位置情報の許可文言がすべて失われる。plist は INFOPLIST_FILE で
+    # そのまま参照させ、リポジトリ側を唯一の正とする。
     entitlements:
       path: Config/iOS.entitlements
     settings:
@@ -51,8 +53,7 @@ targets:
     sources:
       - path: Sources/Shared
       - path: Sources/watchOS
-    info:
-      path: Config/watchOS-Info.plist
+    # iOS 側と同じ理由で `info:` は指定しない。
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer.watchkitapp
