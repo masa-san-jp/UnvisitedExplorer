@@ -26,10 +26,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer
-        PRODUCT_NAME: 未踏マップ
-        # PRODUCT_NAME が非ASCIIのため、モジュール名は明示しないと
-        # サニタイズされて @testable import できなくなる。
-        PRODUCT_MODULE_NAME: UnvisitedExplorer
+        # ホーム画面の表示名は Info.plist の CFBundleDisplayName (未踏マップ) が担う。
+        # PRODUCT_NAME を非ASCIIにするとバンドル名が 未踏マップ.app になり、
+        # XcodeGen がターゲット名から組み立てる TEST_HOST が実体と食い違う。
+        # モジュール名のサニタイズ問題も同時に起きるため、ここは ASCII に保つ。
+        PRODUCT_NAME: UnvisitedExplorer
         INFOPLIST_FILE: Config/iOS-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1"
@@ -48,8 +49,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.masa.UnvisitedExplorer.watchkitapp
-        PRODUCT_NAME: 未踏マップ
-        PRODUCT_MODULE_NAME: UnvisitedExplorerWatch
+        # iOS 側と同じ理由で ASCII に保つ。表示名は CFBundleDisplayName。
+        PRODUCT_NAME: UnvisitedExplorerWatch
         INFOPLIST_FILE: Config/watchOS-Info.plist
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
