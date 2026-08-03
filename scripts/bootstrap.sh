@@ -8,4 +8,3 @@ fi
 
 cd "$(dirname "$0")/.."
 xcodegen generate
-open UnvisitedExplorer.xcodeproj
