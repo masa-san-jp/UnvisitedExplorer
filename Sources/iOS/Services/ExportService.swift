@@ -26,7 +26,9 @@ struct ExportService {
     }
 
     static func writeCSV(samples: [LocationSample]) throws -> URL {
-        var rows = ["id,timestamp,latitude,longitude,altitude,horizontal_accuracy,speed,course,source"]
+        var rows = [
+            "id,timestamp,latitude,longitude,altitude,horizontal_accuracy,speed,course,source,layer"
+        ]
         let formatter = ISO8601DateFormatter()
         rows.append(contentsOf: samples.map { sample in
             [
@@ -38,7 +40,8 @@ struct ExportService {
                 String(sample.horizontalAccuracy),
                 String(sample.speed),
                 String(sample.course),
-                sample.sourceRawValue
+                sample.sourceRawValue,
+                sample.layerRawValue
             ].joined(separator: ",")
         })
         let url = FileManager.default.temporaryDirectory

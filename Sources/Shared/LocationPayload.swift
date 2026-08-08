@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public enum LocationSource: String, Codable, Sendable {
@@ -39,5 +40,31 @@ public struct LocationPayload: Codable, Identifiable, Sendable, Hashable {
         self.speed = speed
         self.course = course
         self.source = source
+    }
+
+    /// 内容から決まる安定した ID。
+    ///
+    /// インポートは `id` を都度 `UUID()` で振ると、同じファイルを2回読んだときに
+    /// 全件が別レコードとして入ってしまう。取り込み経路ではこれを使い、
+    /// 同一地点・同一時刻の点が再投入されても既存 ID と衝突して弾かれるようにする。
+    public static func stableID(
+        timestamp: Date,
+        latitude: Double,
+        longitude: Double,
+        source: LocationSource
+    ) -> UUID {
+        let seed = [
+            source.rawValue,
+            String(Int(timestamp.timeIntervalSince1970.rounded())),
+            String(format: "%.6f", latitude),
+            String(format: "%.6f", longitude)
+        ].joined(separator: "|")
+
+        let digest = Array(SHA256.hash(data: Data(seed.utf8)).prefix(16))
+        var raw = uuid_t(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        withUnsafeMutableBytes(of: &raw) { buffer in
+            for (index, byte) in digest.enumerated() { buffer[index] = byte }
+        }
+        return UUID(uuid: raw)
     }
 }

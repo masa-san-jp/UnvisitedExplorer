@@ -2,17 +2,50 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!--
+    このファイルがビルドに入る Info.plist の唯一の正。
+    project.yml で `info:` を指定すると XcodeGen がここを生成し直し、
+    下の設定がすべて失われるため、指定してはならない。
+  -->
+  <key>CFBundleDevelopmentRegion</key>
+  <string>ja</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key>
+  <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+
   <key>CFBundleDisplayName</key>
   <string>未踏マップ</string>
   <key>UILaunchScreen</key>
   <dict/>
+
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>訪問した場所を地図に記録し、未訪問エリアを提案するために位置情報を使用します。</string>
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
   <string>アプリを閉じている間も移動履歴を記録するために位置情報を使用します。</string>
+
   <key>UIBackgroundModes</key>
   <array>
+    <!-- L0〜L2 / L4 -->
     <string>location</string>
+    <!-- L3 時刻ハートビート (BGAppRefreshTask) -->
+    <string>fetch</string>
+  </array>
+
+  <!-- Heartbeat.identifier と一致させること。食い違うと登録時にクラッシュする。 -->
+  <key>BGTaskSchedulerPermittedIdentifiers</key>
+  <array>
+    <string>jp.masa.UnvisitedExplorer.heartbeat</string>
   </array>
 </dict>
 </plist>
