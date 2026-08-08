@@ -11,6 +11,7 @@ final class LocationStoreTests: XCTestCase {
         try ModelContainer(
             for: LocationSample.self,
             VisitedCell.self,
+            RecordingStat.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }

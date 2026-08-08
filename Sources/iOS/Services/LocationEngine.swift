@@ -29,6 +29,17 @@ final class LocationEngine: NSObject, ObservableObject {
     /// 続いたときに離脱済みの古い位置へ再登録し、即座にまた離脱する狭いループになる。
     private var lastKnownCoordinate: CLLocationCoordinate2D?
 
+    /// `didUpdateLocations` は L0 の配信と `requestLocation()` の結果の
+    /// 両方が通る一本道で、CoreLocation は区別を教えてくれない。
+    /// こちらから要求したときだけ理由を控えておき、次の配信に割り当てる。
+    /// 取りこぼした場合は L0 とみなす(best-effort)。
+    private var pendingAttribution: RecordingLayer?
+
+    private func consumeAttribution() -> RecordingLayer {
+        defer { pendingAttribution = nil }
+        return pendingAttribution ?? .significantChange
+    }
+
     /// L2 の追尾アンカー。常に同じ identifier で張り替え、リージョンを溜めない。
     private static let anchorIdentifier = "trail.anchor"
     private static let anchorRadius: CLLocationDistance = 150
@@ -132,6 +143,7 @@ final class LocationEngine: NSObject, ObservableObject {
         // 前回の待ちが残っていれば解放してから差し替える。
         finishHeartbeat(false)
         heartbeatCompletion = completion
+        pendingAttribution = .heartbeat
         manager.requestLocation()
     }
 
@@ -193,7 +205,7 @@ final class LocationEngine: NSObject, ObservableObject {
 
     // MARK: - 記録
 
-    private func record(_ location: CLLocation) {
+    private func record(_ location: CLLocation, layer: RecordingLayer) {
         // stop() 済みでも、キュー済みの delegate コールバックはここへ到達しうる。
         guard isRecording else { return }
 
@@ -208,7 +220,7 @@ final class LocationEngine: NSObject, ObservableObject {
             course: location.course,
             source: .iPhone
         )
-        apply(store.ingest(payload), acceptedLocation: location)
+        apply(store.ingest(payload, layer: layer), acceptedLocation: location)
     }
 
     private func record(_ visit: CLVisit) {
@@ -231,7 +243,8 @@ final class LocationEngine: NSObject, ObservableObject {
                     speed: -1,
                     course: -1,
                     source: .iPhone
-                )
+                ),
+                layer: .visit
             ),
             acceptedLocation: nil
         )
@@ -268,12 +281,13 @@ extension LocationEngine: CLLocationManagerDelegate {
         didUpdateLocations locations: [CLLocation]
     ) {
         Task { @MainActor in
+            let layer = consumeAttribution()
             // アンカーの基準は精度フィルタを通す前の生の位置を使う。
             if let newest = locations.last {
                 lastKnownCoordinate = newest.coordinate
             }
             for location in locations {
-                record(location)
+                record(location, layer: layer)
             }
             refreshAnchor()
             finishHeartbeat(true)
@@ -297,6 +311,7 @@ extension LocationEngine: CLLocationManagerDelegate {
             guard identifier == Self.anchorIdentifier else { return }
             // 離脱イベントは座標を持たないため単発測位する。
             // 結果は didUpdateLocations に届き、そこでアンカーが張り直される。
+            pendingAttribution = .geofence
             self.manager.requestLocation()
         }
     }

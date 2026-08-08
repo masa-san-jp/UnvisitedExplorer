@@ -11,7 +11,7 @@ struct UnvisitedExplorerApp: App {
 
     init() {
         watchReceiver = WatchConnectivityReceiver { payload in
-            _ = LocationEngine.shared.store.ingest(payload)
+            _ = LocationEngine.shared.store.ingest(payload, layer: .watch)
         }
     }
 

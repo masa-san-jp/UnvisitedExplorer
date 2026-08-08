@@ -9,7 +9,9 @@ import SwiftData
 enum Persistence {
     static let container: ModelContainer = {
         do {
-            return try ModelContainer(for: LocationSample.self, VisitedCell.self)
+            return try ModelContainer(
+                for: LocationSample.self, VisitedCell.self, RecordingStat.self
+            )
         } catch {
             fatalError("SwiftDataの初期化に失敗しました: \(error)")
         }

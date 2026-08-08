@@ -47,6 +47,7 @@ final class LocationStore: ObservableObject {
     @discardableResult
     func ingest(
         _ payload: LocationPayload,
+        layer: RecordingLayer = .unknown,
         policy: IngestPolicy = .live,
         now: Date = Date()
     ) -> IngestOutcome {
@@ -56,7 +57,12 @@ final class LocationStore: ObservableObject {
             now: now,
             policy: policy
         )
-        guard decision == .accept else { return .rejected(decision) }
+        guard decision == .accept else {
+            note(layer: layer, accepted: false, at: now)
+            // 棄却時はここで打ち切るので、集計だけを確定させる。
+            try? context.save()
+            return .rejected(decision)
+        }
 
         let payloadID = payload.id
         var duplicateDescriptor = FetchDescriptor<LocationSample>(
@@ -64,6 +70,8 @@ final class LocationStore: ObservableObject {
         )
         duplicateDescriptor.fetchLimit = 1
         if (try? context.fetch(duplicateDescriptor).first) != nil {
+            note(layer: layer, accepted: false, at: now)
+            try? context.save()
             return .rejected(.rejectDuplicate)
         }
 
@@ -73,7 +81,8 @@ final class LocationStore: ObservableObject {
                 longitude: payload.longitude
             )
         )
-        context.insert(LocationSample(payload: payload, gridKey: cell.key))
+        context.insert(LocationSample(payload: payload, gridKey: cell.key, layer: layer))
+        note(layer: layer, accepted: true, at: now)
 
         let cellKey = cell.key
         var cellDescriptor = FetchDescriptor<VisitedCell>(
@@ -149,7 +158,9 @@ final class LocationStore: ObservableObject {
                     longitude: payload.longitude
                 )
             )
-            context.insert(LocationSample(payload: payload, gridKey: cell.key))
+            context.insert(
+                LocationSample(payload: payload, gridKey: cell.key, layer: .imported)
+            )
             knownIDs.insert(payload.id)
 
             if let existing = cells[cell.key] {
@@ -177,6 +188,13 @@ final class LocationStore: ObservableObject {
             }
         }
 
+        // 集計は点ごとに fetch すると遅いので、最後にまとめて反映する。
+        noteBulk(
+            layer: .imported,
+            accepted: summary.accepted,
+            rejected: summary.rejected + summary.duplicated,
+            at: Date()
+        )
         guard flush(&summary) else { return summary }
 
         // 取り込み後は最新の点を基準に戻す。取り込んだ末尾は過去日時のことがある。
@@ -202,6 +220,8 @@ final class LocationStore: ObservableObject {
     func deleteAll(samples: [LocationSample], cells: [VisitedCell]) -> Bool {
         samples.forEach(context.delete)
         cells.forEach(context.delete)
+        // 集計だけ残ると、全削除したのに件数が出続けることになる。
+        ((try? context.fetch(FetchDescriptor<RecordingStat>())) ?? []).forEach(context.delete)
         do {
             try context.save()
         } catch {
@@ -210,6 +230,39 @@ final class LocationStore: ObservableObject {
         }
         lastAccepted = nil
         return true
+    }
+
+    /// レイヤー別の集計を進める(仕様 §10.3)。保存は呼び出し側に任せる。
+    private func note(layer: RecordingLayer, accepted: Bool, at date: Date) {
+        noteBulk(
+            layer: layer,
+            accepted: accepted ? 1 : 0,
+            rejected: accepted ? 0 : 1,
+            at: date
+        )
+    }
+
+    private func noteBulk(layer: RecordingLayer, accepted: Int, rejected: Int, at date: Date) {
+        guard accepted > 0 || rejected > 0 else { return }
+
+        let raw = layer.rawValue
+        var descriptor = FetchDescriptor<RecordingStat>(
+            predicate: #Predicate { $0.layerRawValue == raw }
+        )
+        descriptor.fetchLimit = 1
+
+        let stat: RecordingStat
+        if let existing = try? context.fetch(descriptor).first {
+            stat = existing
+        } else {
+            stat = RecordingStat(layer: layer)
+            context.insert(stat)
+        }
+
+        stat.lastFiredAt = date
+        stat.accepted += accepted
+        stat.rejected += rejected
+        if accepted > 0 { stat.lastAcceptedAt = date }
     }
 
     private static func loadLastAccepted(from context: ModelContext) -> AcceptedPoint? {
