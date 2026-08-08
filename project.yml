@@ -36,6 +36,11 @@ targets:
         INFOPLIST_FILE: Config/iOS-Info.plist
         CODE_SIGN_ENTITLEMENTS: Config/iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1"
+        # .xcodeproj は生成物なので、Xcode の画面で Team を選んでも
+        # 再生成のたびに消える。環境変数から流し込めるようにしておく。
+        #   export DEVELOPMENT_TEAM=XXXXXXXXXX
+        # 未設定なら空になり、従来どおり Xcode 側で選ぶ運用になる。
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
     # Watch は当面 iOS ターゲットに embed しない (Issue #10 の R3)。
     # embed すると watchOS 側のバイナリ生成が二重定義になり、iOS のビルド自体が
     # 通らない ("Multiple commands produce ... UnvisitedExplorerWatch")。
@@ -62,6 +67,7 @@ targets:
         INFOPLIST_FILE: Config/watchOS-Info.plist
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
 
   UnvisitedExplorerTests:
     type: bundle.unit-test
